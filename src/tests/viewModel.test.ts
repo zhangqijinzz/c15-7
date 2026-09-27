@@ -37,6 +37,30 @@ describe('EnergyLensViewModel', () => {
     expect(recovered.getState().document?.scenarios).toHaveLength(2);
   });
 
+  it('shows and persists recovery when the saved active scenario is missing', () => {
+    const otherScenario = { ...structuredClone(exampleScenario), id: 'scenario-other', name: '备用方案' };
+    const recoveredDocument: EnergyDocument = {
+      version: 1,
+      scenarios: [structuredClone(exampleScenario), otherScenario],
+      activeScenarioId: exampleScenario.id,
+    };
+    repository.load = () => ({
+      document: recoveredDocument,
+      warnings: [{ kind: 'info', code: 'activeScenarioMissing', message: '原选中的方案已不存在，已切换到“夏日居家方案”，其他方案均已保留。' }],
+      shouldPersist: true,
+    });
+
+    const recovered = new EnergyLensViewModel(repository);
+    recovered.initialize();
+
+    expect(recovered.activeScenario?.id).toBe(exampleScenario.id);
+    expect(recovered.getState().document?.scenarios).toHaveLength(2);
+    expect(recovered.getState().status).toBe('editing');
+    expect(recovered.getState().notice).toEqual(expect.objectContaining({ kind: 'info' }));
+    expect(recovered.getState().notice?.text).toContain('其他方案均已保留');
+    expect(repository.save).toHaveBeenCalledWith(recoveredDocument);
+  });
+
   it('surfaces persistence failure as a recoverable error', () => {
     repository.save.mockImplementation(() => { throw new Error('quota'); });
     vm.addDevice();

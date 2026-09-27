@@ -1,5 +1,6 @@
 import { cloneScenario, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
 import { findScenario, type EnergyRepository } from './repository';
+import type { DocumentLoadResult } from './repository';
 import type { EnergyDevice, EnergyDocument, EnergyScenario, Notice, ViewStatus } from './types';
 
 export interface EnergyLensState {
@@ -25,7 +26,27 @@ export class EnergyLensViewModel {
 
   initialize(): void {
     try {
-      this.state = { document: this.repository.load(), status: 'ready', notice: null };
+      const loaded = normalizeLoadResult(this.repository.load());
+      let status: ViewStatus = 'ready';
+      let notice: Notice | null = null;
+
+      if (loaded.warnings.length > 0) {
+        const preferredWarning = loaded.warnings.find((warning) => warning.code === 'activeScenarioMissing')
+          ?? loaded.warnings[0];
+        status = preferredWarning.kind === 'error' ? 'error' : 'editing';
+        notice = { kind: preferredWarning.kind, text: loaded.warnings.map((warning) => warning.message).join(' ') };
+
+        if (loaded.shouldPersist) {
+          try {
+            this.repository.save(loaded.document);
+          } catch {
+            status = 'error';
+            notice = { kind: 'error', text: '本地数据已恢复，但自动保存修复结果失败，请稍后再编辑。' };
+          }
+        }
+      }
+
+      this.state = { document: loaded.document, status, notice };
     } catch {
       this.state = { document: null, status: 'error', notice: { kind: 'error', text: '本地数据读取失败，请刷新重试' } };
     }
@@ -124,4 +145,9 @@ export class EnergyLensViewModel {
   }
 
   private emit(): void { this.listeners.forEach((listener) => listener(this.state)); }
+}
+
+function normalizeLoadResult(result: DocumentLoadResult | EnergyDocument): DocumentLoadResult {
+  if ('warnings' in result && 'shouldPersist' in result) return result;
+  return { document: result, warnings: [], shouldPersist: false };
 }
