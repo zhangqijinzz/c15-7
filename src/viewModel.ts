@@ -25,7 +25,9 @@ export class EnergyLensViewModel {
 
   initialize(): void {
     try {
-      this.state = { document: this.repository.load(), status: 'ready', notice: null };
+      const { document, notice } = this.repository.load();
+      // 数据修复发生时保持 ready（数据可用），但必须把切换/修复明确告知用户
+      this.state = { document, status: notice?.kind === 'error' ? 'error' : 'ready', notice };
     } catch {
       this.state = { document: null, status: 'error', notice: { kind: 'error', text: '本地数据读取失败，请刷新重试' } };
     }

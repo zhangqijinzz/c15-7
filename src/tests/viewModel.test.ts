@@ -6,7 +6,7 @@ import type { EnergyRepository } from '../repository';
 
 function makeRepository(): EnergyRepository & { data: EnergyDocument; save: ReturnType<typeof vi.fn> } {
   const data: EnergyDocument = { version: 1, scenarios: [structuredClone(exampleScenario)], activeScenarioId: exampleScenario.id };
-  return { data, load: () => data, save: vi.fn((next: EnergyDocument) => { data.scenarios = next.scenarios; data.activeScenarioId = next.activeScenarioId; }) };
+  return { data, load: () => ({ document: data, notice: null }), save: vi.fn((next: EnergyDocument) => { data.scenarios = next.scenarios; data.activeScenarioId = next.activeScenarioId; }) };
 }
 
 describe('EnergyLensViewModel', () => {
@@ -42,5 +42,40 @@ describe('EnergyLensViewModel', () => {
     vm.addDevice();
     expect(vm.getState().status).toBe('error');
     expect(vm.getState().notice?.text).toContain('保存失败');
+  });
+});
+
+describe('EnergyLensViewModel recovery notices', () => {
+  it('surfaces the active-pointer realignment notice instead of silently switching', () => {
+    const document: EnergyDocument = {
+      version: 1,
+      scenarios: [structuredClone(exampleScenario)],
+      activeScenarioId: exampleScenario.id,
+    };
+    const repo: EnergyRepository = {
+      load: () => ({ document, notice: { kind: 'info', text: '之前选中的方案已不存在，已自动切换到列表中的第一个方案' } }),
+      save: vi.fn(),
+    };
+    const vm = new EnergyLensViewModel(repo);
+    vm.initialize();
+    expect(vm.getState().status).toBe('ready');
+    expect(vm.getState().notice?.text).toContain('已自动切换');
+    expect(vm.activeScenario?.id).toBe(exampleScenario.id);
+  });
+
+  it('enters error status when recovery had to drop scenarios', () => {
+    const document: EnergyDocument = {
+      version: 1,
+      scenarios: [structuredClone(exampleScenario)],
+      activeScenarioId: exampleScenario.id,
+    };
+    const repo: EnergyRepository = {
+      load: () => ({ document, notice: { kind: 'error', text: '本地数据已损坏且无法修复，已为你重建示例方案' } }),
+      save: vi.fn(),
+    };
+    const vm = new EnergyLensViewModel(repo);
+    vm.initialize();
+    expect(vm.getState().status).toBe('error');
+    expect(vm.getState().notice).not.toBeNull();
   });
 });

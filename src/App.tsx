@@ -25,7 +25,7 @@ function App() {
         <div className="hero-spark"><span>本月预计用电</span><strong>{formatNumber(summary.total.monthlyKwh)} <small>kWh</small></strong><div className="sparkline"><i /><i /><i /><i /><i /><i /><i /></div></div>
       </section>
 
-      {state.notice && <div className={`notice ${state.notice.kind}`} role="status"><span>{state.notice.kind === 'error' ? '!' : '✓'}</span>{state.notice.text}</div>}
+      {state.notice && <div className={`notice ${state.notice.kind}`} role="status"><span>{state.notice.kind === 'error' ? '!' : state.notice.kind === 'info' ? 'i' : '✓'}</span>{state.notice.text}</div>}
 
       <div className="workspace-grid">
         <section className="panel setup-panel">
